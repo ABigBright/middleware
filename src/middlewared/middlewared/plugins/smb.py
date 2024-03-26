@@ -2,6 +2,7 @@ import asyncio
 import codecs
 import enum
 import errno
+import middlewared.sqlalchemy as sa
 import os
 import re
 from pathlib import Path
@@ -9,7 +10,6 @@ import stat
 import unicodedata
 
 from copy import deepcopy
-from samba import param
 
 from middlewared.common.attachment import LockableFSAttachmentDelegate
 from middlewared.common.listen import SystemServiceListenMultipleDelegate
@@ -22,140 +22,28 @@ from middlewared.service import accepts, job, private, SharingService
 from middlewared.service import ConfigService, ValidationErrors, filterable
 from middlewared.service_exception import CallError, MatchNotFound
 from middlewared.plugins.smb_.smbconf.reg_global_smb import LOGLEVEL_MAP
-from middlewared.plugins.smb_.utils import smb_strip_comments
+from middlewared.plugins.smb_.constants import (
+    NETIF_COMPLETED_SENTINEL,
+    CONFIGURED_SENTINEL,
+    SMB_AUDIT_DEFAULTS,
+    INVALID_SHARE_NAME_CHARACTERS,
+    RESERVED_SHARE_NAMES,
+    SMBHAMODE,
+    SMBCmd,
+    SMBBuiltin,
+    SMBPath,
+    SMBSharePreset
+)
+from middlewared.plugins.smb_.utils import (
+    smbconf_getparm,
+    lpctx_validate_global_parm,
+    smb_strip_comments,
+)
 from middlewared.plugins.tdb.utils import TDBError
 from middlewared.plugins.idmap_.utils import IDType, SID_LOCAL_USER_PREFIX, SID_LOCAL_GROUP_PREFIX
-import middlewared.sqlalchemy as sa
-from middlewared.utils import filter_list, run, MIDDLEWARE_RUN_DIR
+from middlewared.utils import filter_list, run
 from middlewared.utils.mount import getmnttree
 from middlewared.utils.path import FSLocation, path_location, is_child_realpath
-
-NETIF_COMPLETE_SENTINEL = f"{MIDDLEWARE_RUN_DIR}/ix-netif-complete"
-CONFIGURED_SENTINEL = '/var/run/samba/.configured'
-SMB_AUDIT_DEFAULTS = {'enable': False, 'watch_list': [], 'ignore_list': []}
-INVALID_SHARE_NAME_CHARACTERS = {'%', '<', '>', '*', '?', '|', '/', '\\', '+', '=', ';', ':', '"', ',', '[', ']'}
-RESERVED_SHARE_NAMES = ('global', 'printers', 'homes')
-
-
-class SMBHAMODE(enum.IntEnum):
-    """
-    'standalone' - Not an HA system.
-    'legacy' - Two samba instances simultaneously running on active and standby controllers with no shared state.
-    'unified' - Single set of state files migrating between controllers. Single netbios name.
-    """
-    STANDALONE = 0
-    UNIFIED = 2
-    CLUSTERED = 3
-
-
-class SMBCmd(enum.Enum):
-    NET = 'net'
-    PDBEDIT = 'pdbedit'
-    SHARESEC = 'sharesec'
-    SMBCACLS = 'smbcacls'
-    SMBCONTROL = 'smbcontrol'
-    SMBPASSWD = 'smbpasswd'
-    STATUS = 'smbstatus'
-    WBINFO = 'wbinfo'
-
-
-class SMBBuiltin(enum.Enum):
-    ADMINISTRATORS = ('builtin_administrators', 'S-1-5-32-544')
-    GUESTS = ('builtin_guests', 'S-1-5-32-546')
-    USERS = ('builtin_users', 'S-1-5-32-545')
-
-    def unix_groups():
-        return [x.value[0] for x in SMBBuiltin]
-
-    def sids():
-        return [x.value[1] for x in SMBBuiltin]
-
-    def by_rid(rid):
-        for x in SMBBuiltin:
-            if x.value[1].endswith(str(rid)):
-                return x
-
-        return None
-
-
-class SMBPath(enum.Enum):
-    GLOBALCONF = ('/etc/smb4.conf', 0o755, False)
-    STUBCONF = ('/usr/local/etc/smb4.conf', 0o755, False)
-    SHARECONF = ('/etc/smb4_share.conf', 0o755, False)
-    STATEDIR = ('/var/db/system/samba4', 0o755, True)
-    PRIVATEDIR = ('/var/db/system/samba4/private', 0o700, True)
-    LEGACYSTATE = ('/root/samba', 0o755, True)
-    LEGACYPRIVATE = ('/root/samba/private', 0o700, True)
-    CACHE_DIR = ('/var/run/samba-cache', 0o755, True)
-    PASSDB_DIR = ('/var/run/samba-cache/private', 0o700, True)
-    MSG_SOCK = ('/var/db/system/samba4/private/msg.sock', 0o700, False)
-    RUNDIR = ('/var/run/samba', 0o755, True)
-    LOCKDIR = ('/var/run/samba-lock', 0o755, True)
-    LOGDIR = ('/var/log/samba4', 0o755, True)
-    IPCSHARE = ('/tmp', 0o1777, True)
-    WINBINDD_PRIVILEGED = ('/var/db/system/samba4/winbindd_privileged', 0o750, True)
-
-    def platform(self):
-        return self.value[0]
-
-    def mode(self):
-        return self.value[1]
-
-    def is_dir(self):
-        return self.value[2]
-
-
-class SMBSharePreset(enum.Enum):
-    NO_PRESET = {"verbose_name": "No presets", "params": {
-        'auxsmbconf': '',
-    }, "cluster": False}
-    DEFAULT_SHARE = {"verbose_name": "Default share parameters", "params": {
-        'path_suffix': '',
-        'home': False,
-        'ro': False,
-        'browsable': True,
-        'timemachine': False,
-        'recyclebin': False,
-        'abe': False,
-        'hostsallow': [],
-        'hostsdeny': [],
-        'aapl_name_mangling': False,
-        'acl': True,
-        'durablehandle': True,
-        'shadowcopy': True,
-        'streams': True,
-        'fsrvp': False,
-        'auxsmbconf': '',
-    }, "cluster": False}
-    TIMEMACHINE = {"verbose_name": "Basic time machine share", "params": {
-        'path_suffix': '',
-        'timemachine': True,
-        'auxsmbconf': '',
-    }, "cluster": False}
-    ENHANCED_TIMEMACHINE = {"verbose_name": "Multi-user time machine", "params": {
-        'path_suffix': '%U',
-        'timemachine': True,
-        'auxsmbconf': '\n'.join([
-            'zfs_core:zfs_auto_create=true'
-        ])
-    }, "cluster": False}
-    MULTI_PROTOCOL_NFS = {"verbose_name": "Multi-protocol (NFSv4/SMB) shares", "params": {
-        'streams': True,
-        'durablehandle': False,
-        'auxsmbconf': '',
-    }, "cluster": False}
-    PRIVATE_DATASETS = {"verbose_name": "Private SMB Datasets and Shares", "params": {
-        'path_suffix': '%U',
-        'auxsmbconf': '\n'.join([
-            'zfs_core:zfs_auto_create=true'
-        ])
-    }, "cluster": False}
-    WORM_DROPBOX = {"verbose_name": "SMB WORM. Files become readonly via SMB after 5 minutes", "params": {
-        'path_suffix': '',
-        'auxsmbconf': '\n'.join([
-            'worm:grace_period = 300',
-        ])
-    }, "cluster": False}
 
 
 class SMBModel(sa.Model):
@@ -195,8 +83,6 @@ class SMBService(ConfigService):
         datastore_prefix = 'cifs_srv_'
         cli_namespace = 'service.smb'
         role_prefix = 'SHARING_SMB'
-
-    LP_CTX = param.LoadParm(SMBPath.STUBCONF.platform())
 
     @private
     def is_configured(self):
@@ -314,75 +200,19 @@ class SMBService(ConfigService):
         return True
 
     @private
-    async def getparm_file(self, parm):
-        with open(SMBPath.GLOBALCONF.platform(), "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line[0] in ["[", "#", ";"]:
-                    continue
-
-                try:
-                    k, v = line.split("=", 1)
-                except ValueError:
-                    self.logger.warning("%s, SMB configuration file contains invalid line.", line)
-                    continue
-
-                k = k.strip()
-                v = v.strip()
-
-                if k.casefold() != parm.casefold():
-                    continue
-
-                if v.lower() in ("off", "false", "no"):
-                    return False
-
-                if v.lower() in ("on", "true", "yes"):
-                    return True
-
-                if v.isnumeric():
-                    return int(v)
-
-                return v
-
-        raise MatchNotFound(parm)
-
-    @private
-    async def getparm(self, parm, section):
+    def getparm(self, parm, section):
         """
         Get a parameter from the smb4.conf file. This is more reliable than
         'testparm --parameter-name'. testparm will fail in a variety of
         conditions without returning the parameter's value.
-
-        First we try to retrieve the parameter from the registry. The registry will be populated
-        with parameters that are explicilty set. It will not return for a value for an implicit default.
-
-        Some basic global configuration parameters (such as "clustering") are not stored in the
-        registry. This means that we need to read them from the configuration file. This only
-        applies to global section.
-
-        Finally, we fall through to retrieving the default value in Samba's param table
-        through samba's param binding. This is initialized under a non-default loadparm context
-        based on empty smb4.conf file.
         """
-        ret = None
         try:
-            ret = await self.middleware.call('sharing.smb.reg_getparm', section, parm)
+            return self.middleware.call_sync('sharing.smb.reg_getparm', section, parm)
         except Exception as e:
             if not section.upper() == 'GLOBAL':
                 raise CallError(f'Attempt to query smb4.conf parameter [{parm}] failed with error: {e}')
 
-        if ret:
-            return ret
-
-        try:
-            if section.upper() == 'GLOBAL':
-                return await self.getparm_file(parm)
-        except MatchNotFound:
-            pass
-        except FileNotFoundError:
-            self.logger.debug("%s: smb.conf file not generated. Returning default value.", parm)
-
-        return self.LP_CTX.get(parm)
+        return smbconf_getparm(parm, section)
 
     @private
     async def get_next_rid(self, objtype, id_):
@@ -907,8 +737,6 @@ class SharingSMBService(SharingService):
         cli_namespace = 'sharing.smb'
         role_prefix = 'SHARING_SMB'
 
-    LP_CTX = param.LoadParm(SMBPath.STUBCONF.platform())
-
     @accepts(
         Dict(
             'sharingsmb_create',
@@ -1341,7 +1169,9 @@ class SharingSMBService(SharingService):
                 This should be a lightweight validation of GLOBAL params.
                 """
                 try:
-                    self.LP_CTX.dump_a_parameter(kv[0].strip())
+                    await self.middleware.run_in_thread(
+                        lpctx_validate_global_parm, kv[0].strip()
+                    )
                 except RuntimeError as e:
                     verrors.add(
                         f'{schema_name}.auxsmbconf',
