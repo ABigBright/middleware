@@ -1071,7 +1071,7 @@ class SharingSMBService(SharingService):
             'datastore.update', self._config.datastore, id_, new,
             {'prefix': self._config.datastore_prefix})
 
-        await self.strip_comments(new)
+        new['auxsmbconf'] = smb_strip_comments(new['auxsmbconf'])
         if not new_is_locked:
             """
             Enabling AAPL SMB2 extensions globally affects SMB shares. If this
