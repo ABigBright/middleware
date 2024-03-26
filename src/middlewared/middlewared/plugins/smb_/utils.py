@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 
 from middlewared.service_exception import MatchNotFound
 from samba import param
@@ -71,13 +72,6 @@ def smbconf_getparm(parm, section='GLOBAL'):
     through samba's param binding. This is initialized under a non-default loadparm context
     based on empty smb4.conf file.
     """
-    try:
-        if (value := (await self.middleware.call('sharing.smb.reg_getparm', section, parm)):
-            return value
-    except Exception:
-        if section.upper() != 'GLOBAL'
-            raise from None
-
     if section.upper() == 'GLOBAL':
         try:
             return smbconf_getparm_file(parm)
