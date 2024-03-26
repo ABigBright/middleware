@@ -23,7 +23,7 @@ from middlewared.service import ConfigService, ValidationErrors, filterable
 from middlewared.service_exception import CallError, MatchNotFound
 from middlewared.plugins.smb_.smbconf.reg_global_smb import LOGLEVEL_MAP
 from middlewared.plugins.smb_.constants import (
-    NETIF_COMPLETED_SENTINEL,
+    NETIF_COMPLETE_SENTINEL,
     CONFIGURED_SENTINEL,
     SMB_AUDIT_DEFAULTS,
     INVALID_SHARE_NAME_CHARACTERS,
