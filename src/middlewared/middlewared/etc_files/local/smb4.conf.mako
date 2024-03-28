@@ -145,7 +145,7 @@
     """
     if ldap_enabled:
         lc = middleware.call_sync('ldap.config')
-        if lc['smb']:
+        if lc['has_samba_schema']:
             # Legacy LDAP parameters
             smbconf.update({
                 'server role': 'member server',
