@@ -831,7 +831,8 @@ class IdmapDomainService(CRUDService):
             data, {'prefix': self._config.datastore_prefix}
         )
         out = await self.query([('id', '=', id_)], {'get': True})
-        await self.middeware.call('etc.generate', 'smb')
+        await self.middleware.call('etc.generate', 'smb')
+        await self.middleware.call('service.restart', 'idmap')
         return out
 
     async def do_update(self, id_, data):
@@ -911,7 +912,7 @@ class IdmapDomainService(CRUDService):
         )
 
         out = await self.query([('id', '=', id_)], {'get': True})
-        await self.middeware.call('etc.generate', 'smb')
+        await self.middleware.call('etc.generate', 'smb')
         cache_job = await self.middleware.call('idmap.clear_idmap_cache')
         await cache_job.wait()
         return out
@@ -925,7 +926,7 @@ class IdmapDomainService(CRUDService):
             raise CallError(f'Deleting system idmap domain [{entry["name"]}] is not permitted.', errno.EPERM)
 
         ret = await self.middleware.call('datastore.delete', self._config.datastore, id_)
-        await self.middeware.call('etc.generate', 'smb')
+        await self.middleware.call('etc.generate', 'smb')
         return ret
 
     def _pyuidgid_to_dict(self, entry):

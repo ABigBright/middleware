@@ -12,8 +12,17 @@
     fsrvp_enabled = any(filter_list(render_ctx['sharing.smb.query'], [['fsrvp', '=', True]]))
     home_share = filter_list(render_ctx['sharing.smb.query'], [['home', '=', True]])
     home_path = home_share[0]['path'] if home_share else None
+
     ad_enabled = render_ctx['directoryservices.get_state']['activedirectory'] != 'DISABLED'
-    ad_idmap = filter_list(idmap, [('name', '=', 'DS_TYPE_ACTIVEDIRECTORY')], {'get': True}) if ad_enabled else None
+    if ad_enabled:
+        ad_idmap = filter_list(
+            render_ctx['idmap.query'],
+            [('name', '=', 'DS_TYPE_ACTIVEDIRECTORY')],
+            {'get': True}
+        )
+    else:
+        ad_idmap = None
+
     ldap_enabled = render_ctx['directoryservices.get_state']['ldap'] != 'DISABLED'
     loglevelint = int(LOGLEVEL_MAP.inv.get(render_ctx['smb.config']['loglevel'], 1))
 

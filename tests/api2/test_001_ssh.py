@@ -120,6 +120,7 @@ def test_007_check_local_accounts(ws_client, account):
 
 
 def test_008_check_root_dataset_settings(ws_client, ip_to_use):
+    SSH_TEST("net conf delshare global")
     data = SSH_TEST('cat /conf/truenas_root_ds.json', user, password, ip_to_use)
     if not data['result']:
         fail(f'Unable to get dataset schema: {data["output"]}')
