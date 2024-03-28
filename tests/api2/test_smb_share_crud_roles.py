@@ -55,7 +55,7 @@ def test_auxsmbconf_rejected_create(create_dataset, role):
                 share = c.call('sharing.smb.create', {
                     'name': 'FAIL',
                     'path': f'/mnt/{create_dataset}',
-                    'auxsmbconf': 'CANARY'
+                    'auxsmbconf': 'test:param = CANARY'
                 })
             finally:
                 if share:
@@ -64,7 +64,7 @@ def test_auxsmbconf_rejected_create(create_dataset, role):
 
 @pytest.mark.parametrize("role", ["SHARING_WRITE", "SHARING_SMB_WRITE"])
 def test_auxsmbconf_rejected_update(create_dataset, role):
-    with smb_share(f'/mnt/{create_dataset}', 'FAIL', {'auxsmbconf': 'Canary'}) as share:
+    with smb_share(f'/mnt/{create_dataset}', 'FAIL') as share:
         with unprivileged_user_client(roles=[role]) as c:
             with pytest.raises(ValidationErrors):
-                c.call('sharing.smb.update', share['id'], {'auxsmbconf': 'Canary'})
+                c.call('sharing.smb.update', share['id'], {'auxsmbconf': 'test:param = Bob'})
