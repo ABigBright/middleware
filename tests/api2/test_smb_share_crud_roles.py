@@ -8,7 +8,7 @@ from middlewared.test.integration.assets.smb import smb_share
 from middlewared.test.integration.utils import call
 
 
-@pytest.fixture(scope=module)
+@pytest.fixture(scope='module')
 def create_dataset():
     with dataset('smb_roles_test') as ds:
         yield ds
