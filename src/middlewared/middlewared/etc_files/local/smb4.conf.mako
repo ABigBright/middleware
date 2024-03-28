@@ -152,7 +152,7 @@
                 'passdb backend': f'ldapsam:{" ".join(lc["uri_list"])}',
                 'ldap admin dn': lc['binddn'],
                 'ldap suffix': lc['basedn'],
-                'ldap ssl': 'start tls' if lc['ssl'] == SSL.STARTTLS.value else 'off',
+                'ldap ssl': 'start tls' if lc['ssl'] == SSL.USESTARTTLS.value else 'off',
                 'local master': False,
                 'domain master': False,
                 'preferred master': False,
