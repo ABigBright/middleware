@@ -142,7 +142,7 @@ class DomainSecrets(Service):
         store backup of secrets.tdb contents (keyed on current netbios name) in
         freenas-v1.db file.
         """
-        ha_mode = await self.middleware.call('smb.get_smb_ha_mode')
+        ha_mode = await sedlf.middleware.call('smb.get_smb_ha_mode')
         if ha_mode == "UNIFIED":
             failover_status = await self.middleware.call("failover.status")
             if failover_status != "MASTER":
