@@ -12,11 +12,6 @@
 
     guest_enabled = any(filter_list(render_ctx['sharing.smb.query'], [['guestok', '=', True]]))
     fsrvp_enabled = any(filter_list(render_ctx['sharing.smb.query'], [['fsrvp', '=', True]]))
-    home_share = filter_list(render_ctx['sharing.smb.query'], [['home', '=', True]])
-    if home_share:
-        try:
-            home_path = middleware.call_sync
-        home_path = home_share[0]['path'] if home_share else None
 
     ad_enabled = render_ctx['directoryservices.get_state']['activedirectory'] != 'DISABLED'
     if ad_enabled:
