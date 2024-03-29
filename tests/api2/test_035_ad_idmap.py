@@ -246,10 +246,9 @@ def test_08_test_backend_options(request, backend):
             v = 'stand-alone'
 
         try:
-            res = json.loads(results['stdout'].strip())
+            res = json.loads(res)
             assert res == v, f"{backend} - [{k}]: {res}"
         except json.decoder.JSONDecodeError:
-            res = results['stdout'].strip()
             if isinstance(v, bool):
                 v = str(v)
 
