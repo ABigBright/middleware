@@ -217,6 +217,7 @@
             'preferred master': False,
             'winbind cache time': 7200,
             'winbind max domain connections': 10,
+            'winbind use default domain': ac['use_default_domain'],
             'client ldap sasl wrapping': 'seal',
             'template shell': '/bin/sh',
             'allow trusted domains': ac['allow_trusted_doms'],
