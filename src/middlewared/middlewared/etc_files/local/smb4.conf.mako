@@ -163,6 +163,7 @@
             smbconf.update({
                 'server role': 'member server',
                 'passdb backend': f'ldapsam:{" ".join(lc["uri_list"])}',
+                'domain logons': True,
                 'ldap admin dn': lc['binddn'],
                 'ldap suffix': lc['basedn'],
                 'ldap ssl': 'start tls' if lc['ssl'] == SSL.USESTARTTLS.value else 'off',
