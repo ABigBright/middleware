@@ -3,7 +3,9 @@
 #
 
 <%
+    import os
     from middlewared.utils import filter_list
+    from middlewared.plugins.account import DEFAULT_HOME_PATH
     from middlewared.plugins.idmap_.utils import TRUENAS_IDMAP_MAX
     from middlewared.plugins.smb_.constants import LOGLEVEL_MAP, SMBPath
     from middlewared.plugins.directoryservices import DSStatus, SSL
@@ -11,7 +13,10 @@
     guest_enabled = any(filter_list(render_ctx['sharing.smb.query'], [['guestok', '=', True]]))
     fsrvp_enabled = any(filter_list(render_ctx['sharing.smb.query'], [['fsrvp', '=', True]]))
     home_share = filter_list(render_ctx['sharing.smb.query'], [['home', '=', True]])
-    home_path = home_share[0]['path'] if home_share else None
+    if home_share:
+        try:
+            home_path = middleware.call_sync
+        home_path = home_share[0]['path'] if home_share else None
 
     ad_enabled = render_ctx['directoryservices.get_state']['activedirectory'] != 'DISABLED'
     if ad_enabled:
@@ -22,6 +27,19 @@
         )
     else:
         ad_idmap = None
+
+    home_share = filter_list(render_ctx['sharing.smb.query'], [['home', '=', True]])
+    if home_share:
+        if ad_enabled:
+            home_path_suffix = '%D/%U'
+        elif not home_share[0]['path_suffix']:
+            home_path_suffix = '%U'
+        else:
+            home_path_suffix = home_share[0]['path_suffix']
+
+        home_path = os.path.join(home_share[0]['path'], home_path_suffix)
+    else:
+        home_path = DEFAULT_HOME_PATH
 
     ldap_enabled = render_ctx['directoryservices.get_state']['ldap'] != 'DISABLED'
     loglevelint = int(LOGLEVEL_MAP.inv.get(render_ctx['smb.config']['loglevel'], 1))
@@ -210,7 +228,7 @@
             'realm': ac['domainname'],
             'ads dns update': False,
             'winbind nss info': ac['nss_info'].lower(),
-            'template homedir': home_path if home_path is not None else '/var/empty',
+            'template homedir': home_path,
             'winbind enum users': not ac['disable_freenas_cache'],
             'winbind enum groups': not ac['disable_freenas_cache'],
         })
