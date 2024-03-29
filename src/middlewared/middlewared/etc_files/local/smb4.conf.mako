@@ -153,6 +153,8 @@
                 'ldap admin dn': lc['binddn'],
                 'ldap suffix': lc['basedn'],
                 'ldap ssl': 'start tls' if lc['ssl'] == SSL.USESTARTTLS.value else 'off',
+                'ldap passwd sync': True,
+                'ldapsam:trusted': True,
                 'local master': False,
                 'domain master': False,
                 'preferred master': False,
