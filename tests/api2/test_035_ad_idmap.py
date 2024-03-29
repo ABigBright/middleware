@@ -252,7 +252,7 @@ def test_08_test_backend_options(request, backend):
             if isinstance(v, bool):
                 v = str(v)
             
-            if res is None:
+            if res is None or v is None:
                 assert v is res, f"{backend} - [{k}]: {res}"
             else:
                 assert v.casefold() == res.casefold(), f"{backend} - [{k}]: {res}"
