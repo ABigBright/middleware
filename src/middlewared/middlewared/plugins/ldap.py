@@ -271,34 +271,6 @@ class LDAPService(ConfigService):
     )
 
     @private
-    async def convert_schema_to_registry(self, data_in):
-        """
-        Convert middleware schema SMB shares to an SMB service definition
-        """
-        data_out = {}
-        if data_in['enable'] is False or data_in['has_samba_schema'] is False:
-            return data_out
-
-        params = LDAP_SMBCONF_PARAMS.copy()
-        for k, v in params.items():
-            if v is None:
-                continue
-            data_out[k] = {"parsed": v}
-
-        passdb_backend = f'ldapsam:{" ".join(data_in["uri_list"])}'
-        data_out.update({
-            "passdb backend": {"parsed": passdb_backend},
-            "ldap admin dn": {"parsed": data_in["binddn"]},
-            "ldap suffix": {"parsed": data_in["basedn"]},
-            "ldap ssl": {"raw": "start tls" if data_in['ssl'] == SSL.USESTARTTLS.value else "off"},
-        })
-
-        if data_in['kerberos_principal']:
-            data_out["kerberos method"] = "system keytab"
-
-        return data_out
-
-    @private
     async def ldap_conf_to_client_config(self, data=None):
         if data is None:
             data = await self.config()
@@ -911,6 +883,7 @@ class LDAPService(ConfigService):
             self.logger.debug(f'Updating SMB workgroup to match the LDAP domain name [{ret}]')
             await self.middleware.call('smb.update', {'workgroup': ret})
 
+        self.logger.debug("XXX: workgroup: %s", ret)
         return ret
 
     @private
