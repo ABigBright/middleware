@@ -332,7 +332,7 @@ def test_32_create_a_file_and_put_on_the_active_directory_share(request):
         ' -c "put testfile.txt testfile.txt"'
     results = cmd_test(command)
     cmd_test('rm testfile.txt')
-    assert results['result'] is True, results["output"]
+    assert results['result'] is True, str(results)
 
 
 def test_33_verify_testfile_is_on_the_active_directory_share(request):
