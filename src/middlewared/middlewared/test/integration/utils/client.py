@@ -38,7 +38,7 @@ def client(*, auth=undefined, auth_required=True, py_exceptions=True, log_py_exc
 
 def host():
     if truenas_server.ip:
-        return truenas_server
+        return truenas_server.ip
 
     # Initialize our settings. At this point on HA servers, the VIP is not available
     truenas_server.server_type = os.environ['SERVER_TYPE']
@@ -54,7 +54,7 @@ def host():
     else:
         truenas_server.ip = os.environ["MIDDLEWARE_TEST_IP"]
 
-    return truenas_server
+    return truenas_server.ip
 
 
 def host_websocket_uri(host_ip=None):
