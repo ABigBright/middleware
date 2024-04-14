@@ -310,6 +310,11 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Forwarded-For $remote_addr;
         }
+        
+	location /proxy {
+	   allow all;
+	   alias /usr/share/clash_yacd/public;
+        }
     }
 % if general_settings['ui_httpsredirect'] and ssl_configuration:
     server {
